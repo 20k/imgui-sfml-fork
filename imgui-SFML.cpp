@@ -14,6 +14,11 @@
 #include <cstddef> // offsetof, NULL
 #include <cassert>
 #include <SFML/Window/Touch.hpp>
+#include <SFML/Graphics.hpp>
+
+#include <imgui/imgui_internal.h>
+
+#include <gl/glext.h>
 
 #ifdef ANDROID
 #ifdef USE_JNI
@@ -120,6 +125,7 @@ static bool s_touchDown[3] = { false, false, false };
 static bool s_mouseMoved = false;
 static sf::Vector2i s_touchPos;
 static sf::Texture* s_fontTexture = NULL; // owning pointer to internal font atlas which is used if user doesn't set custom sf::Texture.
+static bool s_textShaderEnabled = true;
 namespace
 {
 
@@ -139,9 +145,13 @@ namespace ImGui
 namespace SFML
 {
 
+static ImFontAtlas* atlas = nullptr;
+
 void Init(sf::RenderTarget& target, bool loadDefaultFont)
 {
-    ImGui::CreateContext();
+    atlas = new ImFontAtlas();
+
+    ImGui::CreateContext(atlas);
     ImGuiIO& io = ImGui::GetIO();
 
     // init keyboard mapping
@@ -215,8 +225,8 @@ void ProcessEvent(const sf::Event& event)
                     }
                 }
                 break;
-            case sf::Event::MouseWheelMoved:
-                io.MouseWheel += static_cast<float>(event.mouseWheel.delta);
+            case sf::Event::MouseWheelScrolled:
+                io.MouseWheel += static_cast<float>(event.mouseWheelScroll.delta);
                 break;
             case sf::Event::KeyPressed: // fall-through
             case sf::Event::KeyReleased:
@@ -335,8 +345,8 @@ void UpdateFontTexture()
 
     io.Fonts->TexID = (void*)texture.getNativeHandle();
 
-    io.Fonts->ClearInputData();
-    io.Fonts->ClearTexData();
+    //io.Fonts->ClearInputData();
+    //io.Fonts->ClearTexData();
 }
 
 sf::Texture& GetFontTexture()
@@ -454,6 +464,17 @@ void DrawRectFilled(const sf::FloatRect& rect, const sf::Color& color,
         ColorConvertFloat4ToU32(color), rounding, rounding_corners);
 }
 
+void SetTextShaderEnabled(bool enabled)
+{
+    s_textShaderEnabled = enabled;
+}
+
+bool TextShaderEnabled()
+{
+    return s_textShaderEnabled;
+}
+
+
 } // end of namespace ImGui
 
 namespace
@@ -477,6 +498,44 @@ void RenderDrawLists(ImDrawData* draw_data)
     if (draw_data->CmdListsCount == 0) {
         return;
     }
+
+    static sf::Shader* shader;
+    static bool has_shader;
+
+    s_textShaderEnabled = false;
+
+    if(!has_shader && s_textShaderEnabled)
+    {
+        shader = new sf::Shader();
+
+        shader->loadFromFile("text.fglsl", sf::Shader::Type::Fragment);
+        shader->setUniform("texture", sf::Shader::CurrentTexture);
+        //shader->setUniform("check_use", 1);
+
+        has_shader = true;
+    }
+
+    /*
+    sf::RenderStates states;
+    states.shader = &shader;
+
+    sf::BlendMode mode(sf::BlendMode::Factor::One, sf::BlendMode::Factor::Zero);
+
+    states.blendMode = mode;
+    */
+
+    /*
+    auto pos = window->Pos;
+    ImVec2 dim = window->Size;
+
+    sf::Sprite spr;
+    spr.setTexture(texture);
+    spr.setPosition(pos.x, pos.y);
+    spr.setTextureRect(sf::IntRect({pos.x, pos.y}, {dim.x, dim.y}));
+
+
+    win.draw(spr, states);
+    */
 
     ImGuiIO& io = ImGui::GetIO();
     assert(io.Fonts->TexID != NULL); // You forgot to create and set font texture
@@ -526,29 +585,92 @@ void RenderDrawLists(ImDrawData* draw_data)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
+    //shader->setUniform("check_use", 1);
+
+    if(s_textShaderEnabled && sf::Shader::isAvailable())
+    {
+        shader->setUniform("check_use", 0);
+
+        sf::Shader::bind(shader);
+    }
+
+    if(ImGui::GetCurrentContext()->IsSrgb)
+        glEnable(GL_FRAMEBUFFER_SRGB);
+
+    bool shader_bound = false;
+
     for (int n = 0; n < draw_data->CmdListsCount; ++n) {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
-        const unsigned char* vtx_buffer = (const unsigned char*)&cmd_list->VtxBuffer.front();
-        const ImDrawIdx* idx_buffer = &cmd_list->IdxBuffer.front();
 
-        glVertexPointer(2, GL_FLOAT, sizeof(ImDrawVert), (void*)(vtx_buffer + offsetof(ImDrawVert, pos)));
-        glTexCoordPointer(2, GL_FLOAT, sizeof(ImDrawVert), (void*)(vtx_buffer + offsetof(ImDrawVert, uv)));
-        glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(ImDrawVert), (void*)(vtx_buffer + offsetof(ImDrawVert, col)));
+        const unsigned char* vtx_buffer = nullptr;
+        const ImDrawIdx* idx_buffer = nullptr;
+
+        if(cmd_list->VtxBuffer.size() > 0)
+        {
+            vtx_buffer = (const unsigned char*)&cmd_list->VtxBuffer.front();
+            idx_buffer = &cmd_list->IdxBuffer.front();
+
+            glVertexPointer(2, GL_FLOAT, sizeof(ImDrawVert), (void*)(vtx_buffer + offsetof(ImDrawVert, pos)));
+            glTexCoordPointer(2, GL_FLOAT, sizeof(ImDrawVert), (void*)(vtx_buffer + offsetof(ImDrawVert, uv)));
+            glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(ImDrawVert), (void*)(vtx_buffer + offsetof(ImDrawVert, col)));
+        }
 
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.size(); ++cmd_i) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+
+            if(pcmd->UseRgbBlending)
+            {
+                //glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+
+                if(s_textShaderEnabled && sf::Shader::isAvailable())
+                {
+                    if(!shader_bound)
+                    {
+                        glBlendFunc(GL_SRC1_COLOR, GL_ONE_MINUS_SRC1_COLOR);
+                        shader->setUniform("check_use", 1);
+                        shader_bound = true;
+                    }
+                }
+                else
+                {
+                    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+                }
+            }
+            else
+            {
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+                if(shader_bound)
+                {
+                    shader->setUniform("check_use", 0);
+
+                    shader_bound = false;
+                }
+            }
+
             if (pcmd->UserCallback) {
                 pcmd->UserCallback(cmd_list, pcmd);
             } else {
-                GLuint tex_id = (GLuint)*((unsigned int*)&pcmd->TextureId);
+                GLuint tex_id;
+                memcpy(&tex_id, &pcmd->TextureId, sizeof(GLuint));
+
                 glBindTexture(GL_TEXTURE_2D, tex_id);
                 glScissor((int)pcmd->ClipRect.x, (int)(fb_height - pcmd->ClipRect.w),
                     (int)(pcmd->ClipRect.z - pcmd->ClipRect.x), (int)(pcmd->ClipRect.w - pcmd->ClipRect.y));
-                glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, GL_UNSIGNED_SHORT, idx_buffer);
+                //glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, GL_UNSIGNED_SHORT, idx_buffer);
+                glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, idx_buffer);
             }
-            idx_buffer += pcmd->ElemCount;
+
+            if(idx_buffer != nullptr)
+                idx_buffer += pcmd->ElemCount;
         }
     }
+
+    sf::Shader::bind(nullptr);
+
+    if(ImGui::GetCurrentContext()->IsSrgb)
+        glDisable(GL_FRAMEBUFFER_SRGB);
+
 #ifdef GL_VERSION_ES_CL_1_1
         glBindTexture(GL_TEXTURE_2D, last_texture);
             glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);

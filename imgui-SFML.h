@@ -77,6 +77,9 @@ namespace SFML
     void DrawLine(const sf::Vector2f& a, const sf::Vector2f& b, const sf::Color& col, float thickness = 1.0f);
     void DrawRect(const sf::FloatRect& rect, const sf::Color& color, float rounding = 0.0f, int rounding_corners = 0x0F, float thickness = 1.0f);
     void DrawRectFilled(const sf::FloatRect& rect, const sf::Color& color, float rounding = 0.0f, int rounding_corners = 0x0F);
+
+    void SetTextShaderEnabled(bool enabled);
+    bool TextShaderEnabled();
 }
 
 #endif //# IMGUI_SFML_H
