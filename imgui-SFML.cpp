@@ -161,7 +161,7 @@ void Init(sf::RenderTarget& target, bool loadDefaultFont)
 {
     atlas = new ImFontAtlas();
 
-    ImGui::CreateContext(atlas);
+    ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
 
     // init keyboard mapping
@@ -342,7 +342,7 @@ void Shutdown()
 
 void UpdateFontTexture()
 {
-    sf::Texture& texture = *s_fontTexture;
+    /*sf::Texture& texture = *s_fontTexture;
 
     ImGuiIO& io = ImGui::GetIO();
     unsigned char* pixels;
@@ -354,8 +354,19 @@ void UpdateFontTexture()
     texture.update(pixels);
 
     io.Fonts->TexID = (void*)texture.getNativeHandle();
+*/
 
-    printf("HELLOD EFAULT FONT MY OLD FRIEND IVE COME OT TALK TO YOU AGAIN\n");
+    ImGuiIO& io = ImGui::GetIO();
+    unsigned char* pixels;
+    int width, height;
+
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+    sf::Texture& texture = *s_fontTexture;
+    texture.create(width, height);
+    texture.update(pixels);
+
+    io.Fonts->TexID = (void*)texture.getNativeHandle();
 
     //io.Fonts->ClearInputData();
     //io.Fonts->ClearTexData();
@@ -638,8 +649,6 @@ void RenderDrawLists(ImDrawData* draw_data)
 
             if(pcmd->UseRgbBlending)
             {
-                //glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
-
                 if(s_textShaderEnabled && sf::Shader::isAvailable())
                 {
                     if(!shader_bound)
@@ -651,7 +660,7 @@ void RenderDrawLists(ImDrawData* draw_data)
                 }
                 else
                 {
-                    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 }
             }
             else
