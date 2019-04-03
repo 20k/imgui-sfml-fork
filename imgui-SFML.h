@@ -16,10 +16,14 @@ namespace sf
     class Window;
 }
 
+struct ImFontAtlas;
+
 namespace ImGui
 {
 namespace SFML
 {
+    ImFontAtlas* GetFontAtlas();
+
     void Init(sf::RenderTarget& target, bool loadDefaultFont = true);
 
     void ProcessEvent(const sf::Event& event);

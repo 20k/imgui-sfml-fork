@@ -140,12 +140,22 @@ bool imageButtonImpl(const sf::Texture& texture, const sf::FloatRect& textureRec
 
 } // anonymous namespace for helper / "private" functions
 
+ImVec4 SfColorToImVec(const sf::Color& col)
+{
+    return {col.r/255.f, col.g/255.f, col.b/255.f, col.a/255.f};
+}
+
 namespace ImGui
 {
 namespace SFML
 {
 
 static ImFontAtlas* atlas = nullptr;
+
+ImFontAtlas* GetFontAtlas()
+{
+    return atlas;
+}
 
 void Init(sf::RenderTarget& target, bool loadDefaultFont)
 {
@@ -180,7 +190,7 @@ void Init(sf::RenderTarget& target, bool loadDefaultFont)
     io.KeyMap[ImGuiKey_Z] = sf::Keyboard::Z;
 
     // init rendering
-    io.DisplaySize = static_cast<sf::Vector2f>(target.getSize());
+    io.DisplaySize = {target.getSize().x, target.getSize().y};
     io.RenderDrawListsFn = RenderDrawLists; // set render callback
 
     if (s_fontTexture) { // delete previously created texture
@@ -281,11 +291,11 @@ void Update(sf::Window& window, sf::RenderTarget& target, sf::Time dt)
 void Update(const sf::Vector2i& mousePos, const sf::Vector2f& displaySize, sf::Time dt)
 {
     ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize = displaySize;
+    io.DisplaySize = {displaySize.x, displaySize.y};
     io.DeltaTime = dt.asSeconds();
 
     if (s_windowHasFocus) {
-        io.MousePos = mousePos;
+        io.MousePos = {mousePos.x, mousePos.y};
         for (unsigned int i = 0; i < 3; i++) {
             io.MouseDown[i] =  s_touchDown[i] || sf::Touch::isDown(i) || s_mousePressed[i] || sf::Mouse::isButtonPressed((sf::Mouse::Button)i);
             s_mousePressed[i] = false;
@@ -345,6 +355,8 @@ void UpdateFontTexture()
 
     io.Fonts->TexID = (void*)texture.getNativeHandle();
 
+    printf("HELLOD EFAULT FONT MY OLD FRIEND IVE COME OT TALK TO YOU AGAIN\n");
+
     //io.Fonts->ClearInputData();
     //io.Fonts->ClearTexData();
 }
@@ -368,7 +380,7 @@ void Image(const sf::Texture& texture,
 void Image(const sf::Texture& texture, const sf::Vector2f& size,
     const sf::Color& tintColor, const sf::Color& borderColor)
 {
-    ImGui::Image((void*)texture.getNativeHandle(), size, ImVec2(0, 0), ImVec2(1, 1), tintColor, borderColor);
+    ImGui::Image((void*)texture.getNativeHandle(), {size.x, size.y}, ImVec2(0, 0), ImVec2(1, 1), SfColorToImVec(tintColor), SfColorToImVec(borderColor));
 }
 
 void Image(const sf::Texture& texture, const sf::FloatRect& textureRect,
@@ -384,7 +396,7 @@ void Image(const sf::Texture& texture, const sf::Vector2f& size, const sf::Float
     ImVec2 uv0(textureRect.left / textureSize.x, textureRect.top / textureSize.y);
     ImVec2 uv1((textureRect.left + textureRect.width) / textureSize.x,
         (textureRect.top + textureRect.height) / textureSize.y);
-    ImGui::Image((void*)texture.getNativeHandle(), size, uv0, uv1, tintColor, borderColor);
+    ImGui::Image((void*)texture.getNativeHandle(), {size.x, size.y}, uv0, uv1, SfColorToImVec(tintColor), SfColorToImVec(borderColor));
 }
 
 void Image(const sf::Sprite& sprite,
@@ -439,9 +451,15 @@ bool ImageButton(const sf::Sprite& sprite, const sf::Vector2f& size,
 void DrawLine(const sf::Vector2f& a, const sf::Vector2f& b, const sf::Color& color,
     float thickness)
 {
+    auto screenPos = ImGui::GetCursorScreenPos();
+
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    sf::Vector2f pos = ImGui::GetCursorScreenPos();
-    draw_list->AddLine(a + pos, b + pos, ColorConvertFloat4ToU32(color), thickness);
+    sf::Vector2f pos = {screenPos.x, screenPos.y};
+
+    auto p1 = a + pos;
+    auto p2 = b + pos;
+
+    draw_list->AddLine({p1.x, p1.y}, {p2.x, p2.y}, ColorConvertFloat4ToU32(SfColorToImVec(color)), thickness);
 }
 
 void DrawRect(const sf::FloatRect& rect, const sf::Color& color,
@@ -451,7 +469,7 @@ void DrawRect(const sf::FloatRect& rect, const sf::Color& color,
     draw_list->AddRect(
         getTopLeftAbsolute(rect),
         getDownRightAbsolute(rect),
-        ColorConvertFloat4ToU32(color), rounding, rounding_corners, thickness);
+        ColorConvertFloat4ToU32(SfColorToImVec(color)), rounding, rounding_corners, thickness);
 }
 
 void DrawRectFilled(const sf::FloatRect& rect, const sf::Color& color,
@@ -461,7 +479,7 @@ void DrawRectFilled(const sf::FloatRect& rect, const sf::Color& color,
     draw_list->AddRectFilled(
         getTopLeftAbsolute(rect),
         getDownRightAbsolute(rect),
-        ColorConvertFloat4ToU32(color), rounding, rounding_corners);
+        ColorConvertFloat4ToU32(SfColorToImVec(color)), rounding, rounding_corners);
 }
 
 void SetTextShaderEnabled(bool enabled)
@@ -690,7 +708,7 @@ bool imageButtonImpl(const sf::Texture& texture, const sf::FloatRect& textureRec
     ImVec2 uv1((textureRect.left + textureRect.width)  / textureSize.x,
                (textureRect.top  + textureRect.height) / textureSize.y);
 
-    return ImGui::ImageButton((void*)texture.getNativeHandle(), size, uv0, uv1, framePadding, bgColor, tintColor);
+    return ImGui::ImageButton((void*)texture.getNativeHandle(), {size.x, size.y}, uv0, uv1, framePadding, SfColorToImVec(bgColor), SfColorToImVec(tintColor));
 }
 
 } // end of anonymous namespace
