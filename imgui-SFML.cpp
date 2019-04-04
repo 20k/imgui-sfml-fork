@@ -623,7 +623,7 @@ void RenderDrawLists(ImDrawData* draw_data)
         sf::Shader::bind(shader);
     }
 
-    if(ImGui::GetCurrentContext()->IsSrgb)
+    if(ImGui::GetCurrentContext()->IsLinearColor)
         glEnable(GL_FRAMEBUFFER_SRGB);
 
     bool use_subpixel_rendering = io.Fonts->IsSubpixelFont;
@@ -698,7 +698,7 @@ void RenderDrawLists(ImDrawData* draw_data)
 
     sf::Shader::bind(nullptr);
 
-    if(ImGui::GetCurrentContext()->IsSrgb)
+    if(ImGui::GetCurrentContext()->IsLinearColor)
         glDisable(GL_FRAMEBUFFER_SRGB);
 
 #ifdef GL_VERSION_ES_CL_1_1
