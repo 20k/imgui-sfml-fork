@@ -161,7 +161,7 @@ void Init(sf::RenderTarget& target, bool loadDefaultFont)
 {
     atlas = new ImFontAtlas();
 
-    ImGui::CreateContext();
+    ImGui::CreateContext(atlas);
     ImGuiIO& io = ImGui::GetIO();
 
     // init keyboard mapping
