@@ -626,6 +626,8 @@ void RenderDrawLists(ImDrawData* draw_data)
     if(ImGui::GetCurrentContext()->IsSrgb)
         glEnable(GL_FRAMEBUFFER_SRGB);
 
+    bool use_subpixel_rendering = io.Fonts->IsSubpixelFont;
+
     bool shader_bound = false;
 
     for (int n = 0; n < draw_data->CmdListsCount; ++n) {
@@ -647,7 +649,8 @@ void RenderDrawLists(ImDrawData* draw_data)
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.size(); ++cmd_i) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
 
-            if(pcmd->UseRgbBlending)
+            // If text and we're a subpixel font
+            if(pcmd->UseRgbBlending && use_subpixel_rendering)
             {
                 if(s_textShaderEnabled && sf::Shader::isAvailable())
                 {
@@ -660,7 +663,7 @@ void RenderDrawLists(ImDrawData* draw_data)
                 }
                 else
                 {
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
                 }
             }
             else
