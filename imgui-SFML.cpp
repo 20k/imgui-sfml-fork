@@ -524,7 +524,6 @@ static std::string simple_shader = R"(
 #version 330
 
 uniform sampler2D texture;
-uniform int mode;
 
 layout(location = 0, index = 0) out vec4 outputColor0;
 layout(location = 0, index = 1) out vec4 outputColor1;
@@ -534,17 +533,8 @@ void main()
     vec4 in_col4 = gl_Color;
     vec4 tex_col4 = texture2D(texture, gl_TexCoord[0].xy);
 
-    if(mode == 0)
-    {
-        outputColor0 = vec4(in_col4.xyz * tex_col4.xyz, in_col4.a * tex_col4.a);
-    }
-
-	//subpixel
-	if(mode == 1)
-	{
-		outputColor0 = vec4(tex_col4.xyz, 1) * in_col4;
-		outputColor1 = 1 - vec4(tex_col4.xyz, 1);
-	}
+    outputColor0 = tex_col4 * in_col4;
+    outputColor1 = 1 - vec4(tex_col4.xyz, 1);
 }
 )";
 
@@ -625,8 +615,6 @@ void RenderDrawLists(ImDrawData* draw_data)
 
     if(s_textShaderEnabled && sf::Shader::isAvailable())
     {
-        shader->setUniform("mode", 0);
-
         sf::Shader::bind(shader);
     }
 
@@ -663,15 +651,17 @@ void RenderDrawLists(ImDrawData* draw_data)
                 {
                     if(!shader_bound)
                     {
-                        //glBlendFunc(GL_SRC1_COLOR, GL_ONE_MINUS_SRC1_COLOR);
                         glBlendFunc(GL_SRC_COLOR, GL_SRC1_COLOR);
-                        shader->setUniform("mode", 1);
                         shader_bound = true;
                     }
                 }
                 else
                 {
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    if(shader_bound)
+                    {
+                        shader_bound = false;
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    }
 
                     ///ok lets ignore shader for the moment
                     ///website says each component is rgb, 3 alphas
@@ -690,13 +680,10 @@ void RenderDrawLists(ImDrawData* draw_data)
             }
             else
             {
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
                 if(shader_bound)
                 {
-                    shader->setUniform("mode", 0);
-
                     shader_bound = false;
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 }
             }
 
