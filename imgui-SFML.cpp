@@ -663,7 +663,15 @@ void RenderDrawLists(ImDrawData* draw_data)
                 }
                 else
                 {
-                    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+                    glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
+                    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+                    ///ok lets ignore shader for the moment
+                    ///website says each component is rgb, 3 alphas
+                    ///source colour should be rgb_cov * vertex_col
+                    ///dst_color = background
+
+                    ///Equation we want overall is rgb_cov * vertex_col * a_param + (1 - rgb_cov * a_param) * background
                 }
             }
             else
