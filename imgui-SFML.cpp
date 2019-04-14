@@ -18,6 +18,7 @@
 
 #include <imgui/imgui_internal.h>
 
+#include <gl/gl.h>
 #include <gl/glext.h>
 
 #ifdef ANDROID
@@ -526,7 +527,23 @@ static std::string simple_shader = R"(
 uniform sampler2D texture;
 
 layout(location = 0, index = 0) out vec4 outputColor0;
-//layout(location = 0, index = 1) out vec4 outputColor1;
+
+void main()
+{
+    //vec4 in_col4 = gl_Color;
+    vec4 tex_col4 = texture2D(texture, gl_TexCoord[0].xy);
+
+    outputColor0 = tex_col4;
+}
+)";
+
+static std::string simple_shader_dual = R"(
+#version 330
+
+uniform sampler2D texture;
+
+layout(location = 0, index = 0) out vec4 outputColor0;
+layout(location = 0, index = 1) out vec4 outputColor1;
 
 void main()
 {
@@ -534,9 +551,11 @@ void main()
     vec4 tex_col4 = texture2D(texture, gl_TexCoord[0].xy);
 
     outputColor0 = tex_col4 * in_col4;
-    //outputColor1 = 1 - vec4(tex_col4.xyz, 1);
+    outputColor1 = 1 - tex_col4;
 }
 )";
+
+//#define DUAL
 
 // Rendering callback
 void RenderDrawLists(ImDrawData* draw_data)
@@ -551,14 +570,22 @@ void RenderDrawLists(ImDrawData* draw_data)
 
     s_textShaderEnabled = true;
 
+    static PFNGLBLENDCOLORPROC pglBlendColor;
+
     if(!has_shader && s_textShaderEnabled)
     {
         shader = new sf::Shader();
 
+        #ifdef DUAL
+        shader->loadFromMemory(simple_shader_dual, sf::Shader::Type::Fragment);
+        #else
         shader->loadFromMemory(simple_shader, sf::Shader::Type::Fragment);
+        #endif
         //shader->loadFromFile(simple_shader, sf::Shader::Type::Fragment);
         shader->setUniform("texture", sf::Shader::CurrentTexture);
         //shader->setUniform("check_use", 1);
+
+        pglBlendColor = (PFNGLBLENDCOLORPROC)wglGetProcAddress("glBlendColor");;
 
         has_shader = true;
     }
@@ -615,7 +642,7 @@ void RenderDrawLists(ImDrawData* draw_data)
 
     if(s_textShaderEnabled && sf::Shader::isAvailable())
     {
-        sf::Shader::bind(shader);
+        //sf::Shader::bind(shader);
     }
 
     if(ImGui::GetCurrentContext()->IsLinearColor)
@@ -644,6 +671,8 @@ void RenderDrawLists(ImDrawData* draw_data)
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.size(); ++cmd_i) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
 
+            bool skip = false;
+
             // If text and we're a subpixel font
             if(pcmd->UseRgbBlending && use_subpixel_rendering)
             {
@@ -651,49 +680,81 @@ void RenderDrawLists(ImDrawData* draw_data)
                 {
                     if(!shader_bound)
                     {
-                        //glBlendFunc(GL_SRC_COLOR, GL_SRC1_COLOR);
-                        glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
+                        #ifdef DUAL
+                        glBlendFunc(GL_ONE, GL_SRC1_COLOR);
+                        #endif // DUAL
+                        //glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
+
+                        //glBlendFunc(GL_ONE, GL_ZERO);
+
+
                         shader_bound = true;
+
+
+                        ///ok lets ignore shader for the moment
+                        ///website says each component is rgb, 3 alphas
+                        ///source colour should be rgb_cov * vertex_col
+                        ///dst_color = background
+
+                        ///Equation we want overall is rgb_cov * vertex_col * a_param + (1 - rgb_cov * a_param) * background
+
+                        ///so overall, a * tex * col + (1 - a * tex) * background
+                        ///with vertex colours set to tex * col, cannot get a * tex out correctly
+                        ///if i remove a, and then set vertex colours to be {1,1,1}, i can get the correct equation
+                        ///could possibly use dual source blending as well but shaders are slow
+
+                        ///in dual source blending, src0 = a * tex * col, then set src1 to 1 - a * tex?
+
+                        ///ok so col is vertex col right?
+                        ///so if we do SRC_COL, ONE_MINUS_SRC_COL? no - gives us an extra col term
+
+
+                        ///If I were to have col available, could do a * tex and 1 - a * tex, then use blend_constant and gl_one
+
+                        ///for some reason getting the wrong result here wrt srgb if using srgb framebuffer, unsure why
+                        ImVec4 col = ImGui::ColorConvertU32ToFloat4(pcmd->RgbBlendColor);
+
+                        pglBlendColor(col.x,col.y,col.z,col.w);
+
+                        #ifndef DUAL
+                        glBlendFunc(GL_CONSTANT_COLOR, GL_ONE_MINUS_SRC_COLOR);
+                        #endif // DUAL
+
+                        sf::Shader::bind(shader);
+
+
+                        //glBlendFunc(GL_ONE, GL_ZERO);
+                        //glBlendFunc(GL_CONSTANT_COLOR, GL_ONE_MINUS_SRC_COLOR);
                     }
                 }
                 else
                 {
                     if(shader_bound)
                     {
+                        sf::Shader::bind(nullptr);
+
                         shader_bound = false;
-                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                        //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+                        glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
                     }
-
-                    ///ok lets ignore shader for the moment
-                    ///website says each component is rgb, 3 alphas
-                    ///source colour should be rgb_cov * vertex_col
-                    ///dst_color = background
-
-                    ///Equation we want overall is rgb_cov * vertex_col * a_param + (1 - rgb_cov * a_param) * background
-
-                    ///so overall, a * tex * col + (1 - a * tex) * background
-                    ///with vertex colours set to tex * col, cannot get a * tex out correctly
-                    ///if i remove a, and then set vertex colours to be {1,1,1}, i can get the correct equation
-                    ///could possibly use dual source blending as well but shaders are slow
-
-                    ///in dual source blending, src0 = a * tex * col, then set src1 to 1 - a * tex?
-
-                    ///ok so col is vertex col right?
-                    ///so if we do SRC_COL, ONE_MINUS_SRC_COL?
                 }
             }
             else
             {
                 if(shader_bound)
                 {
+                    sf::Shader::bind(nullptr);
+
                     shader_bound = false;
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 }
-            }
 
+                skip = true;
+            }
             if (pcmd->UserCallback) {
                 pcmd->UserCallback(cmd_list, pcmd);
-            } else {
+            } else if(!skip) {
                 GLuint tex_id;
                 memcpy(&tex_id, &pcmd->TextureId, sizeof(GLuint));
 
