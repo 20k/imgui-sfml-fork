@@ -526,7 +526,7 @@ static std::string simple_shader = R"(
 uniform sampler2D texture;
 
 layout(location = 0, index = 0) out vec4 outputColor0;
-layout(location = 0, index = 1) out vec4 outputColor1;
+//layout(location = 0, index = 1) out vec4 outputColor1;
 
 void main()
 {
@@ -534,7 +534,7 @@ void main()
     vec4 tex_col4 = texture2D(texture, gl_TexCoord[0].xy);
 
     outputColor0 = tex_col4 * in_col4;
-    outputColor1 = 1 - vec4(tex_col4.xyz, 1);
+    //outputColor1 = 1 - vec4(tex_col4.xyz, 1);
 }
 )";
 
@@ -651,7 +651,8 @@ void RenderDrawLists(ImDrawData* draw_data)
                 {
                     if(!shader_bound)
                     {
-                        glBlendFunc(GL_SRC_COLOR, GL_SRC1_COLOR);
+                        //glBlendFunc(GL_SRC_COLOR, GL_SRC1_COLOR);
+                        glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
                         shader_bound = true;
                     }
                 }
@@ -676,6 +677,9 @@ void RenderDrawLists(ImDrawData* draw_data)
                     ///could possibly use dual source blending as well but shaders are slow
 
                     ///in dual source blending, src0 = a * tex * col, then set src1 to 1 - a * tex?
+
+                    ///ok so col is vertex col right?
+                    ///so if we do SRC_COL, ONE_MINUS_SRC_COL?
                 }
             }
             else
