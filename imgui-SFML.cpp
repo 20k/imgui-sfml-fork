@@ -551,14 +551,14 @@ void main()
 
     //in_col4 = vec4(1,1,1,1);
 
-    vec4 ip = vec4((tex_col4 * in_col4).xyz, 1);
+    //vec4 ip = vec4((tex_col4 * in_col4).xyz, 1);
 
-    outputColor0 = ip;
-    outputColor1 = vec4((1 - tex_col4).xyz, 1);
+    outputColor0 = tex_col4 * in_col4;
+    outputColor1 = 1 - tex_col4;
 }
 )";
 
-//#define DUAL
+#define DUAL
 
 // Rendering callback
 void RenderDrawLists(ImDrawData* draw_data)
@@ -644,9 +644,14 @@ void RenderDrawLists(ImDrawData* draw_data)
     if(ImGui::GetCurrentContext()->IsLinearColor)
         glEnable(GL_FRAMEBUFFER_SRGB);
 
+    #ifdef DUAL
+    sf::Shader::bind(shader);
+    #endif // DUAL
+
     bool use_subpixel_rendering = io.Fonts->IsSubpixelFont;
 
     bool shader_bound = false;
+    ImU32 last_col = 0; // default glblendcolor
 
     for (int n = 0; n < draw_data->CmdListsCount; ++n) {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -707,26 +712,36 @@ void RenderDrawLists(ImDrawData* draw_data)
                         ///If I were to have col available, could do a * tex and 1 - a * tex, then use blend_constant and gl_one
 
                         ///for some reason getting the wrong result here wrt srgb if using srgb framebuffer, unsure why
-                        ImVec4 col = ImGui::ColorConvertU32ToFloat4(pcmd->RgbBlendColor);
 
-                        pglBlendColor(col.x,col.y,col.z,col.w);
 
                         #ifndef DUAL
+                        sf::Shader::bind(shader);
                         glBlendFunc(GL_CONSTANT_COLOR, GL_ONE_MINUS_SRC_COLOR);
                         #endif // DUAL
-
-                        sf::Shader::bind(shader);
-
 
                         //glBlendFunc(GL_ONE, GL_ZERO);
                         //glBlendFunc(GL_CONSTANT_COLOR, GL_ONE_MINUS_SRC_COLOR);
                     }
+
+                    #ifndef DUAL
+
+                    if(pcmd->RgbBlendColor != last_col)
+                    {
+                        ImVec4 col = ImGui::ColorConvertU32ToFloat4(pcmd->RgbBlendColor);
+
+                        pglBlendColor(col.x,col.y,col.z,col.w);
+
+                        last_col = pcmd->RgbBlendColor;
+                    }
+                    #endif // DUAL
                 }
                 else
                 {
                     if(shader_bound)
                     {
+                        #ifndef DUAL
                         sf::Shader::bind(nullptr);
+                        #endif // DUAL
 
                         shader_bound = false;
                         //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -739,7 +754,9 @@ void RenderDrawLists(ImDrawData* draw_data)
             {
                 if(shader_bound)
                 {
+                    #ifndef DUAL
                     sf::Shader::bind(nullptr);
+                    #endif // DUAL
 
                     shader_bound = false;
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
