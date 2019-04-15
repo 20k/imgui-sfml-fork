@@ -530,7 +530,6 @@ layout(location = 0, index = 0) out vec4 outputColor0;
 
 void main()
 {
-    //vec4 in_col4 = gl_Color;
     vec4 tex_col4 = texture2D(texture, gl_TexCoord[0].xy);
 
     outputColor0 = tex_col4;
@@ -550,8 +549,12 @@ void main()
     vec4 in_col4 = gl_Color;
     vec4 tex_col4 = texture2D(texture, gl_TexCoord[0].xy);
 
-    outputColor0 = tex_col4 * in_col4;
-    outputColor1 = 1 - tex_col4;
+    //in_col4 = vec4(1,1,1,1);
+
+    vec4 ip = vec4((tex_col4 * in_col4).xyz, 1);
+
+    outputColor0 = ip;
+    outputColor1 = vec4((1 - tex_col4).xyz, 1);
 }
 )";
 
@@ -638,13 +641,6 @@ void RenderDrawLists(ImDrawData* draw_data)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    //shader->setUniform("check_use", 1);
-
-    if(s_textShaderEnabled && sf::Shader::isAvailable())
-    {
-        //sf::Shader::bind(shader);
-    }
-
     if(ImGui::GetCurrentContext()->IsLinearColor)
         glEnable(GL_FRAMEBUFFER_SRGB);
 
@@ -671,8 +667,6 @@ void RenderDrawLists(ImDrawData* draw_data)
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.size(); ++cmd_i) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
 
-            bool skip = false;
-
             // If text and we're a subpixel font
             if(pcmd->UseRgbBlending && use_subpixel_rendering)
             {
@@ -682,6 +676,7 @@ void RenderDrawLists(ImDrawData* draw_data)
                     {
                         #ifdef DUAL
                         glBlendFunc(GL_ONE, GL_SRC1_COLOR);
+                        //glBlendFunc(GL_ONE, GL_ZERO);
                         #endif // DUAL
                         //glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
 
@@ -750,11 +745,10 @@ void RenderDrawLists(ImDrawData* draw_data)
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 }
 
-                skip = true;
             }
             if (pcmd->UserCallback) {
                 pcmd->UserCallback(cmd_list, pcmd);
-            } else if(!skip) {
+            } else {
                 GLuint tex_id;
                 memcpy(&tex_id, &pcmd->TextureId, sizeof(GLuint));
 
