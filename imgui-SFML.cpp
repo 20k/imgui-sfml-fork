@@ -538,6 +538,7 @@ void main()
 
 static std::string simple_shader_dual = R"(
 #version 330
+#extension GL_ARB_compatibility : require
 
 uniform sampler2D texture;
 
